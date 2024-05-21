@@ -1,6 +1,6 @@
-###SBG VSWIR Surface Reflectance – Algorithm Theoretical Basis Document (ATBD)
+# SBG VSWIR Surface Reflectance – Algorithm Theoretical Basis Document (ATBD)
 
-**D. R. Thompson*<sup>1</sup>
+**David R. Thompson*<sup>1</sup>
 
 <sup>1</sup>Jet Propulsion Laboratory, California Institute of Technology
 
@@ -22,7 +22,7 @@ Corresponding author: David R. Thompson (david.r.thompson@jpl.nasa.gov)
 
 # 1 Version Description
 
-This is Version 1.0 of the SBG VSWIR snow physics algorithms.
+This is Version 1.0 of the SBG VSWIR surface reflectance algorithms.
 
 # 2 Introduction
 
