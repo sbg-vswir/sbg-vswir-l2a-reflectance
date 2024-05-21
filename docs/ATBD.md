@@ -1,4 +1,4 @@
-**SBG VSWIR Snow Physics Products – Algorithm Theoretical Basis Document (ATBD)**
+###SBG VSWIR Surface Reflectance – Algorithm Theoretical Basis Document (ATBD)
 
 **D. R. Thompson*<sup>1</sup>
 
@@ -18,7 +18,7 @@ Corresponding author: David R. Thompson (david.r.thompson@jpl.nasa.gov)
 
 # Plain Language Summary
 
-## Keywords: snow fractional cover, snow grain size, snow albedo
+## Keywords: surface reflectance, spectroscopy, radiative transfer
 
 # 1 Version Description
 
