@@ -1,6 +1,6 @@
-**SBG VSWIR Snow Physics Products – Algorithm Theoretical Basis Document (ATBD)**
+# SBG VSWIR Surface Reflectance – Algorithm Theoretical Basis Document (ATBD)
 
-**D. R. Thompson*<sup>1</sup>
+**David R. Thompson*<sup>1</sup>
 
 <sup>1</sup>Jet Propulsion Laboratory, California Institute of Technology
 
@@ -18,127 +18,37 @@ Corresponding author: David R. Thompson (david.r.thompson@jpl.nasa.gov)
 
 # Plain Language Summary
 
-## Keywords: snow fractional cover, snow grain size, snow albedo
+## Keywords: surface reflectance, spectroscopy, radiative transfer
 
 # 1 Version Description
 
-This is Version 1.0 of the SBG VSWIR snow physics algorithms.
+This is Version 1.0 of the SBG VSWIR surface reflectance algorithms.
 
 # 2 Introduction
 
-# 3 Context/Background
+Following on recommendations by the National Academies of Science, Engineering and Medicine in their 2017 Decadal Survey on Earth Sciences, the National Aeronautics and Space Administration (NASA) selected the Surface Biology and Geology (SBG) mission for implementation as part of its Earth System Observatory (ESO). SBG in particular aims to measure properties of the Earth’s surface composition and ecology. It is comprised of two platforms: a wide-swath thermal infrared instrument on a free-flying spacecraft in a polar orbit with an afternoon equatorial crossing time; and a separate spacecraft carrying a wide-swath solar reflectance imaging spectrometer operating in the Visible Shortwave Infrared (VSWIR), with a morning equatorial crossing time. SBG-VSWIR will measure the solar reflected range at approximately 380-2500 nm at 10 nm spectral sampling, over a 180 km swath with 30 m spatial sampling. This measurement enables repeat coverage of any location on Earth every 16 days. The visible-shortwave infrared range is sensitive to diverse physical processes in the Earth’s surface and atmosphere (Cawse-Nicholson 2021). The spectral, spatial, and radiometric resolutions of the SBG VSWIR instrument will enable Earth-system-scale measurements of aquatic ecosystems, including biogeochemistry products across inland, nearshore coastal, and open ocean ecosystems.
 
-## 3.1 Historical Perspective
+This document describes the algorithms used to estimate the surface reflectance spectra, specifically the hemispherical directional reflectance factors (HDRFs), from the top of atmosphere radiance spectra. 
 
-## 3.2 Additional Information
+# 3 Context/Background and Historical Perspective
+
+Atmospheric correction (Thompson et al., 2019) has a multi-decadal history of use for imaging spectrometers viewing the Earth surface.  This on airborne precursor instruments such as NASA’s “Classic” Airborne Visible Infrared Imaging Spectrometer (AVIRIS-C, Green et al., 1998) and has been extended to its next generation counterpart (AVIRIS-NG, Thompson et al., 2017). Such analyses have been conducted in dozens of campaigns over decades of successful operations.  Many empirical methods based on scene averaging (Kruse 1988), flat fielding (Roberts et al., 1986), QUAC (Bernstein et al., 2005), and cloud shadow methods (Reinersman et al., 1998) are useful but do not scale to global observations with diverse scene content and sparse field data. ).  They rely either on manual intervention, or on specific characteristics of the scene such as a spatially homogeneous atmosphere or known scene content, precluding their use with EMIT.  Instead, we favor a physically-motivated correction based on radiative transfer models. These have the dual advantages of superior generalizability across scenes without the need for manual intervention in the analysis, and physical interpretability.  
+Recent reviews surveying different atmospheric alternatives appear in Thompson et al. (2019), Ientilucci and Adler-Golden (2019), and for aquatic spectra, Frouin et al. (2019).   Broadly speaking, physically-based methods themselves fall into two general categories (Frouin et al., 2019). Sequential methods first estimate atmospheric properties based on analysis of the radiance spectrum, and then invert the radiance directly via closed-form algebra to estimate the surface reflectance.  In other words, atmosphere and surface are estimated in two independent steps.  Existing physics-based atmospheric correction codes designed for imaging spectrometers all use this general method.  They include ACORN (Kruse et al., 2004), ATCOR (Richter and Shlaepferm 2002), ATREM (Gao, 1993) and the AVIRIS-NG standard approach derived from ATREM (Thompson et al., 2015).
+
+Alternatively, simultaneous methods estimate surface and atmosphere simultaneously, as in Bayesian Maximum A Posteriori estimation (Thompson et al., 2018, 2019b).  Simultaneous methods carry several advantages that are crucial for the EMIT mission.  First, they enable rigorous uncertainty accounting.  Uncertainty accounting on the input side means respecting instrument noise in the radiance data which can vary by surface type, observing conditions, and wavelength, as well as incorporating any prior background knowledge available in the form of statistical priors.  The ability to seamlessly account for these factors makes the Bayesian inversion a flexible and powerful approach to achieve SBG-VSWIR’s extreme sensitivity requirements.  On the output side, uncertainty accounting lets the algorithm propagate posterior uncertainty estimates downstream, where they can improve the performance of mineral fitting algorithms (Thompson et al., 2020b).  A second independent benefit of the simultaneous model inversion approach is the demonstrated ability to use the entire spectral range of acquisition in the atmospheric correction, enabling estimation of subtler broad atmospheric perturbations such as aerosols (an SBG-VSWIR product, in the form of an AOD mask). The main disadvantage is that the methods use an iterative algorithm, leading to higher computational demands.  
+
+The SBG-VSWIR mission borrows an approach used operationally in past years by the EMIT mission: a Bayesian model inversion strategy, known colloquially in the atmospheric sounding community as Optimal Estimation (OE, e.g. Rodgers 2000), with careful application of geospatial interpolation to glean the benefits of both while minimizing cost.  The specific OE-based approach used in SBG-VSWIR has been validated by decades of operational use by NASA’s atmospheric remote sounding spectrometers on many missions and millions of acquisitions (Rodgers 2000), and for VSWIR spectral ranges by the EMIT mission (Thompson et al., 2024; Coleman et al., 2024). It has also been validated though peer-reviewed field studies with over 20 in situ validation trials of surface reflectance in airborne campaigns over synthetic, water, vegetated, and bare terrain (Thompson et al., 2018, Thompson et al., 2019b, Thompson et al., 2019c, Thompson et al., 2020).  Outside the imaging spectroscopy community, the OE approach has been In situ measurement protocols have also been vetted by decades of continuing operational use.  The code used is distributed as open source through the public repository at https://github.com/isofit/isofit/.  This transparency helps for finding errors, and also for end users who desire details on the implementation specifics (e.g. data layout in memory, command flow, etc.).  The code will undergo continuing development by a growing community of users throughout the SBG mission.
+![image](https://github.com/sbg-vswir/sbg-vswir-l2b-reflectance/assets/2358270/5eae6cd6-67f2-40ae-b752-0feba36873b9)
+
+![Raw, Radiance, and Reflectance Spectra](products.pdf)
 
 # 4 Algorithm Description
 
-![img.png](figs/img.png)
-
-**Figure 1.** _Map of snow physics SRR core product algorithms._
 
 ## 4.1 Multiple Endmember Snow Cover and Grain Size (MEMSCAG)
 
 ### 4.1.1 Scientific theory
 
-MEMSCAG features a joint estimation of snow grain size and fractional cover by coupling a spectral unmixing approach with a radiative transfer model. Both the number of endmembers and the endmembers themselves are flexible on a per-pixel basis to address spatial heterogeneity. In its default version, MEMSCAG uses a spectral library containing three types of surface endmembers: snow, vegetation, and rock. These can be extended, if desired, by soil and lake ice spectral endmembers.
-
-Snow endmembers are simulated by combining Mie scattering and the discrete-ordinates radiative transfer model (DISORT) (Stamnes et al., 1988) for grain radii of 10 – 1100 µm, with steps of 10 µm. The simulations include variations with respect to differing solar geometry and diffuse and direct components of irradiance, and represent the hemispherical-directional reflectance factor (HDRF):
-
-,(1)
-
-where and are zenith and azimuth angles, and the subscripts 0 and r signify incident and reflected. is reflected radiance, is the direct, and is the diffuse irradiance illuminating the surface. Endmembers for all other surface types are derived from ASD spectral measurements in the field, which are then transformed into HDRF using Equation 1.
-
-MEMSCAG analyzes linear spectral mixtures for all possible combinations of two or more endmembers by fitting a set of linear equations to the HDRF measured by the instrument. The linear spectral mixture model is expressed as:
-
-,(2)
-
-where is the measured HDRF, is the fraction of endmember _i_, is the HDRF of endmember _i_, and is the residual error at wavelength . The system of equations is then solved by modified Gram-Schmidt orthogonalization (see Section 4.1.2). The residual error is expressed accordingly:
-
-.(3)
-
-As goodness-of-fit criterion, MEMSCAG uses the root mean squared error (RMSE) as suggested by Painter et al. (1998) and Roberts et al. (1998):
-
-,(4)
-
-where _M_ is the number of instrument bands. As final step, MEMSCAG normalizes the estimated snow fractional cover by the additive complement of the shade fraction to account for topographic effects on irradiance:
-
-.(5)
-
-For the selection of valid mixture models, MEMSCAG applies specific constraints:
-
-1. No more than one endmember from a surface class is present.
-2. The spectral fractions sum to 1.0.
-3. Spectral fractions are in the range [-0.01, 1.01].
-4. Overall RMSE \< 2.5%.
-5. No seven consecutive residuals (i.e., for consecutive wavelengths) exceed 2.5%.
-
-From all _n_-endmember collections that meet the constraints, MEMSCAG selects the models with the lowest RMSE and then assigns snow fraction and grain size from the model with the fewest endmembers.
-
-### 4.1.1.1 Scientific theory assumptions
-
-MEMSCAG applies the following assumptions and limitations:
-
-1. At-sensor radiance is a linear combination of radiances reflected from individual surfaces, i.e., linear spectral unmixing is a valid approach.
-2. is the additive complement to the sum of the physical spectral fractions (i.e., )
-3. The surface is flat and horizontal, i.e., Lambertian.
-4. Variability in HDRF for a given solar geometry is negligible within the range of possible reflectance angles that occur under realistic acquisition conditions.
-5. Light-absorbing particles (LAP) and liquid water in snow as well as thin snow do not impact the retrieval of snow fraction and grain size.
-6. Effects of sub-pixel surface roughness on the HDRF of snow are negligible.
-7. Vegetation canopy is snow-free.
-
-### 4.1.2 Mathematical theory
-
-In the following, all uppercase letters represent matrices, while lowercase letters typify vectors. MEMSCAG solves the set of linear equations in the mixture model by modified Gram-Schmidt orthogonalization. First, it finds the orthogonal and upper-triangular matrices to the transpose of the spectral library dataset matrix by applying QR-factorization, such that
-
-,(6)
-
-where . The orthogonal matrix _Q_ is then used to compute the regression coefficients _b_ based on a given measurement _y_:
-
-,(7)
-
-where _y_ = . Finally, the endmember fractional cover values _p_ are calculated using both _Q_ and the upper-triangular matrix _R_:
-
-.(8)
-
-### 4.1.3 Algorithm Input Variables
-
-**Table 2.** _Input variables to MEMSCAG_
-
-| Name | Description | Unit | Required |
-| --- | --- | --- | --- |
-| HDRF | hemispherical-directional reflectance factor per wavelength | unitless | true |
-| Endmember Spectral Library | collection of spectral surface endmembers (HDRF per wavelength) | unitless | true |
-| Observation Geometry | solar zenith angle, view zenith angle, relative azimuth angle | degree | false |
-| Solar Irradiance | direct and diffuse downwelling solar irradiance per wavelength |
- | false |
-
-### 4.1.4 Algorithm Output Variables
-
-**Table 2.** _Output variables from MEMSCAG_
-
-| Name | Description | Unit |
-| --- | --- | --- |
-| Snow Fractional Cover | sub-pixel snow fractional cover | % |
-| Snow Grain Size | effective radius of snow grains |
- |
-| Spectral Residuals | deviation between measured and modeled HDRF per wavelength | % |
-| RMSE | root mean square error for the spectral residuals | % |
-
-**4.2**  **Nolin/Dozier Model**
-
-4.2.1 Scientific theory
-
-The Nolin/Dozier model is an alternative to MEMSCAG in terms of estimating snow grain size. However, it does not include the calculation of snow fractional cover. The method uses the scaled ice absorption band area around 1030 nm and relates it to snow grain radius obtained from a look-up-table (LUT). The scaled absorption band area is a dimensionless quantity and calculated by integrating the scaled absorption band depth over the wavelengths of the ice absorption feature:
-
-,(9)
-
-where is the continuum reflectance, and is the measured reflectance spectrum. The continuum end points are determined by averaging pairs of reflectance values at both 950 and 960 nm, and 1080 and 1090 nm. The integral of Equation 9 is then calculated using the trapezoidal rule.
-
-The LUT is calculated by using the same models and input variables as for the MEMSCAG algorithm: a combination of Mie scattering and DISORT for varying grain radii (50 – 1000 µm), solar illumination angles, as well as direct and diffuse irradiances.
-
-###
 
 ### 4.2.1.1 Scientific theory assumptions
 
